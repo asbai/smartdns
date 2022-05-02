@@ -31,8 +31,12 @@
 #include <linux/limits.h>
 #include <linux/netlink.h>
 #include <netinet/tcp.h>
-#include <openssl/crypto.h>
-#include <openssl/ssl.h>
+#ifndef NOT_USE_OPENSSL
+#	include <openssl/crypto.h>
+#	include <openssl/ssl.h>
+#else
+#	include <stdio.h> // missing stderr
+#endif // USE_SSL
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
@@ -607,6 +611,7 @@ int ipset_del(const char *ipsetname, const unsigned char addr[], int addr_len)
 	return _ipset_operate(ipsetname, addr, addr_len, 0, IPSET_DEL);
 }
 
+#ifndef NOT_USE_OPENSSL
 unsigned char *SSL_SHA256(const unsigned char *d, size_t n, unsigned char *md)
 {
 	static unsigned char m[SHA256_DIGEST_LENGTH];
@@ -651,6 +656,7 @@ int SSL_base64_decode(const char *in, unsigned char *out)
 errout:
 	return -1;
 }
+#endif // USE_SSL
 
 int create_pid_file(const char *pid_file)
 {
@@ -703,6 +709,7 @@ errout:
 	return -1;
 }
 
+#ifndef NOT_USE_OPENSSL
 #if OPENSSL_API_COMPAT < 0x10100000
 #define THREAD_STACK_SIZE (16 * 1024)
 static pthread_mutex_t *lock_cs;
@@ -765,6 +772,7 @@ void SSL_CRYPTO_thread_cleanup(void)
 	OPENSSL_free(lock_count);
 }
 #endif
+#endif // USE_SSL
 
 #define SERVER_NAME_LEN 256
 #define TLS_HEADER_LEN 5
@@ -1049,6 +1057,7 @@ void print_stack(void)
 {
 	const size_t max_buffer = 30;
 	void *buffer[max_buffer];
+	int idx = 0;
 
 	struct backtrace_state state = {buffer, buffer + max_buffer};
 	_Unwind_Backtrace(unwind_callback, &state);
@@ -1058,7 +1067,7 @@ void print_stack(void)
 	}
 	
 	tlog(TLOG_FATAL, "Stack:");
-	for (int idx = 0; idx < frame_num; ++idx) {
+	for (idx = 0; idx < frame_num; ++idx) {
 		const void *addr = buffer[idx];
 		const char *symbol = "";
 

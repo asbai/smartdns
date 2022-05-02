@@ -50,7 +50,7 @@ int dns_conf_tcp_idle_time = 120;
 /* cache */
 int dns_conf_cachesize = DEFAULT_DNS_CACHE_SIZE;
 int dns_conf_prefetch = 0;
-int dns_conf_serve_expired = 0;
+int dns_conf_serve_expired = 1;
 int dns_conf_serve_expired_ttl = 0;
 int dns_conf_serve_expired_reply_ttl = 5;
 
@@ -90,12 +90,13 @@ art_tree dns_conf_domain_rule;
 struct dns_conf_address_rule dns_conf_address_rule;
 
 /* dual-stack selection */
-int dns_conf_dualstack_ip_selection;
-int dns_conf_dualstack_ip_selection_threshold = 30;
+int dns_conf_dualstack_ip_selection = 1;
+int dns_conf_dualstack_ip_selection_threshold = 15;
 
 /* TTL */
 int dns_conf_rr_ttl;
-int dns_conf_rr_ttl_min;
+int dns_conf_rr_ttl_rely_max = 60;
+int dns_conf_rr_ttl_min = 600;
 int dns_conf_rr_ttl_max;
 int dns_conf_force_AAAA_SOA;
 
@@ -256,7 +257,7 @@ static int _config_server(int argc, char *argv[], dns_server_type_t type, int de
 #ifdef FEATURE_CHECK_EDNS
 		/* experimental feature */
 		{"check-edns", no_argument, NULL, 'e'},   /* check edns */
-#endif 
+#endif
 		{"spki-pin", required_argument, NULL, 'p'}, /* check SPKI pin */
 		{"host-name", required_argument, NULL, 'h'}, /* host name */
 		{"http-host", required_argument, NULL, 'H'}, /* http host */
@@ -607,7 +608,8 @@ static int _conf_domain_rule_ipset(char *domain, const char *ipsetname)
 		goto errout;
 	}
 
-	for (char *tok = strtok(copied_name, ","); tok; tok = strtok(NULL, ",")) {
+	char *tok; // make gcc 4.9 happy
+	for (tok = strtok(copied_name, ","); tok; tok = strtok(NULL, ",")) {
 		if (tok[0] == '#') {
 			if (strncmp(tok, "#6:", 3u) == 0) {
 				type = DOMAIN_RULE_IPSET_IPV6;
@@ -898,13 +900,13 @@ static int _config_bind_ip(int argc, char *argv[], DNS_BIND_TYPE type)
 	/* clang-format off */
 	static struct option long_options[] = {
 		{"group", required_argument, NULL, 'g'}, /* add to group */
-		{"no-rule-addr", no_argument, NULL, 'A'},   
-		{"no-rule-nameserver", no_argument, NULL, 'N'},   
-		{"no-rule-ipset", no_argument, NULL, 'I'},   
-		{"no-rule-sni-proxy", no_argument, NULL, 'P'},   
+		{"no-rule-addr", no_argument, NULL, 'A'},
+		{"no-rule-nameserver", no_argument, NULL, 'N'},
+		{"no-rule-ipset", no_argument, NULL, 'I'},
+		{"no-rule-sni-proxy", no_argument, NULL, 'P'},
 		{"no-rule-soa", no_argument, NULL, 'O'},
-		{"no-speed-check", no_argument, NULL, 'S'},  
-		{"no-cache", no_argument, NULL, 'C'},  
+		{"no-speed-check", no_argument, NULL, 'S'},
+		{"no-cache", no_argument, NULL, 'C'},
 		{"no-dualstack-selection", no_argument, NULL, 'D'},
 		{"force-aaaa-soa", no_argument, NULL, 'F'},
 		{NULL, no_argument, NULL, 0}
@@ -1176,11 +1178,13 @@ static int _config_iplist_rule(char *subnet, enum address_rule rule)
 static int _config_qtype_soa(void *data, int argc, char *argv[])
 {
 	struct dns_qtype_soa_list *soa_list;
+	int i = 0;
+
 	if (argc <= 1) {
 		return -1;
 	}
 
-	for (int i = 1; i < argc; i++) {
+	for (i = 1; i < argc; i++) {
 		soa_list = malloc(sizeof(*soa_list));
 		if (soa_list == NULL) {
 			tlog(TLOG_ERROR, "cannot malloc memory");
@@ -1254,7 +1258,7 @@ static int _conf_edns_client_subnet(void *data, int argc, char *argv[])
 	struct sockaddr_storage addr;
 	socklen_t addr_len = sizeof(addr);
 
-	if (argc <= 1 || data == NULL) {
+	if (argc <= 1) {
 		return -1;
 	}
 
@@ -1485,6 +1489,7 @@ static struct config_item _config_item[] = {
 	CONF_INT("rr-ttl", &dns_conf_rr_ttl, 0, CONF_INT_MAX),
 	CONF_INT("rr-ttl-min", &dns_conf_rr_ttl_min, 0, CONF_INT_MAX),
 	CONF_INT("rr-ttl-max", &dns_conf_rr_ttl_max, 0, CONF_INT_MAX),
+	CONF_INT("rr-ttl-reply-max", &dns_conf_rr_ttl_rely_max, 0, CONF_INT_MAX),
 	CONF_YESNO("force-AAAA-SOA", &dns_conf_force_AAAA_SOA),
 	CONF_CUSTOM("force-qtype-SOA", _config_qtype_soa, NULL),
 	CONF_CUSTOM("blacklist-ip", _config_blacklist_ip, NULL),
